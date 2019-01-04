@@ -15,4 +15,4 @@ struct TorInstance {
 };
 
 struct TorInstance *allium_new_instance(char *tor_path);
-bool allium_start(struct TorInstance *instance);
+bool allium_start(struct TorInstance *instance, char *config);
