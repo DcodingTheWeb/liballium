@@ -7,6 +7,8 @@ struct TorInstance *allium_new_instance(char *tor_path) {
 	if (instance == NULL) return NULL;
 	instance->tor_path = tor_path;
 	instance->pid = 0;
+	instance->buffer.size = 0;
+	instance->buffer.data = NULL;
 	return instance;
 }
 
@@ -135,4 +137,51 @@ bool allium_start(struct TorInstance *instance, char *config, allium_pipe *outpu
 	instance->pid = pid;
 	#endif
 	return true;
+}
+
+char *allium_read_stdout_line(struct TorInstance *instance) {
+	char *buffer = instance->buffer.data;
+	
+	// Check for valid buffer and allocate if needed
+	if (instance->buffer.size == 0 || !buffer) {
+		buffer = instance->buffer.data = malloc(instance->buffer.size = 80 + 1);
+		if (!buffer) return NULL;
+	}
+	
+	// Process the input
+	unsigned int read_len = 0;
+	while (true) {
+		// Read data
+		#ifdef _WIN32
+		unsigned long bytes_read;
+		if (ReadFile(instance->stdout_pipe, buffer, 1, &bytes_read, NULL) == false) return NULL;
+		#else
+		if (read(instance->stdout_pipe, buffer, 1) == -1) return NULL;
+		#endif
+		
+		// Check if we have reached end of line
+		if (buffer[0] == '\n') break;
+		
+		// Proceed to the next character
+		++buffer; ++read_len;
+		
+		// Resize buffer if it is full
+		if (read_len == instance->buffer.size) {
+			char *new_buffer = malloc(instance->buffer.size += 50);
+			if (new_buffer) memcpy(new_buffer, instance->buffer.data, read_len);
+			free(instance->buffer.data);
+			if (!new_buffer) return NULL;
+			instance->buffer.data = new_buffer;
+			buffer = instance->buffer.data + read_len;
+		}
+	}
+	
+	// Terminate the new line with null character and return
+	#ifdef _WIN32
+	// Special handling for Windows, terminate at CR if present
+	buffer[read_len >= 2 && buffer[-1] == '\r' ? -1 : 0] = '\0';
+	#else
+	buffer[0] = '\0';
+	#endif
+	return instance->buffer.data;
 }

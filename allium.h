@@ -19,7 +19,12 @@ struct TorInstance {
 	allium_pipe stdout_pipe;
 	unsigned long pid;
 	char *tor_path;
+	struct {
+		size_t size;
+		char *data;
+	} buffer;
 };
 
 struct TorInstance *allium_new_instance(char *tor_path);
 bool allium_start(struct TorInstance *instance, char *config, allium_pipe *output_pipes);
+char *allium_read_stdout_line(struct TorInstance *instance);
