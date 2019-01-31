@@ -1,3 +1,6 @@
+#ifndef ALLIUM_H
+#define ALLIUM_H
+
 #include <stdbool.h>
 #ifdef _WIN32
 #include <windows.h>
@@ -28,3 +31,5 @@ struct TorInstance {
 struct TorInstance *allium_new_instance(char *tor_path);
 bool allium_start(struct TorInstance *instance, char *config, allium_pipe *output_pipes);
 char *allium_read_stdout_line(struct TorInstance *instance);
+
+#endif
