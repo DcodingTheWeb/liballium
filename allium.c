@@ -36,14 +36,16 @@ bool allium_start(struct TorInstance *instance, char *config, allium_pipe *outpu
 		CreatePipe(&pipes[0], &pipes[1], &pipe_secu_attribs, 0);
 		output_pipes = pipes;
 	}
+	SetHandleInformation(output_pipes[0], HANDLE_FLAG_INHERIT, 0);
 	instance->startup_info.hStdOutput = output_pipes[1];
 	instance->startup_info.hStdError = output_pipes[1];
 	instance->stdout_pipe = output_pipes[0]; // Stored for internal reference
 	
+	HANDLE input_pipes[2];
 	if (config) {
-		// Reuse the pipes array to store standard input pipes
-		CreatePipe(&pipes[0], &pipes[1], &pipe_secu_attribs, 0);
-		instance->startup_info.hStdInput = pipes[0];
+		CreatePipe(&input_pipes[0], &input_pipes[1], &pipe_secu_attribs, 0);
+		SetHandleInformation(input_pipes[1], HANDLE_FLAG_INHERIT, 0);
+		instance->startup_info.hStdInput = input_pipes[0];
 	}
 	
 	// Create the process
@@ -60,18 +62,23 @@ bool allium_start(struct TorInstance *instance, char *config, allium_pipe *outpu
 		SecureZeroMemory(&instance->process, sizeof instance->process)
 	);
 	
-	// Free command string if needed
-	if (config) free(cmd);
+	// Close the write end of our stdout handle
+	CloseHandle(output_pipes[1]);
+	
+	if (config) {
+		CloseHandle(input_pipes[0]); // Close the read end of our stdin handle
+		free(cmd); // Free the command string
+	}
 	
 	// Write config to Tor's standard input
 	unsigned long bytes_written;
 	if (success) {
-		WriteFile(pipes[1], config, strlen(config), &bytes_written, NULL);
+		WriteFile(input_pipes[1], config, strlen(config), &bytes_written, NULL);
 		// Work around for simulating Ctrl + Z which sends the substitution character (ASCII 26),
 		// this is needed in order for Tor to detect EOT/EOF while reading the config
-		WriteFile(pipes[1], &(char){26}, 1, &bytes_written, NULL);
+		WriteFile(input_pipes[1], &(char){26}, 1, &bytes_written, NULL);
 	}
-	CloseHandle(pipes[1]);
+	CloseHandle(input_pipes[1]);
 	
 	// Return on failure
 	if (!success) return false;
@@ -154,9 +161,9 @@ char *allium_read_stdout_line(struct TorInstance *instance) {
 		// Read data
 		#ifdef _WIN32
 		unsigned long bytes_read;
-		if (ReadFile(instance->stdout_pipe, buffer, 1, &bytes_read, NULL) == false) return NULL;
+		if (ReadFile(instance->stdout_pipe, buffer, 1, &bytes_read, NULL) == false || bytes_read == 0) return NULL;
 		#else
-		if (read(instance->stdout_pipe, buffer, 1) == -1) return NULL;
+		if (read(instance->stdout_pipe, buffer, 1) <= 0) return NULL;
 		#endif
 		
 		// Check if we have reached end of line
