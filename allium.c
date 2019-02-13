@@ -1,6 +1,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include "allium.h"
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 
 struct TorInstance *allium_new_instance(char *tor_path) {
 	struct TorInstance *instance = malloc(sizeof(struct TorInstance));
@@ -191,4 +194,17 @@ char *allium_read_stdout_line(struct TorInstance *instance) {
 	buffer[0] = '\0';
 	#endif
 	return instance->buffer.data;
+}
+
+int allium_get_exit_code(struct TorInstance *instance) {
+	#ifdef _WIN32
+	unsigned long exit_code;
+	bool success = GetExitCodeProcess(instance->process.hProcess, &exit_code);
+	if (!success) return -1;
+	return exit_code;
+	#else
+	int status;
+	waitpid(instance->pid, &status, 0);
+	return WEXITSTATUS(status);
+	#endif
 }
