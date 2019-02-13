@@ -208,3 +208,13 @@ int allium_get_exit_code(struct TorInstance *instance) {
 	return WEXITSTATUS(status);
 	#endif
 }
+
+void allium_clean(struct TorInstance *instance) {
+	#ifdef _WIN32
+	CloseHandle(instance->process.hProcess);
+	CloseHandle(instance->process.hThread);
+	CloseHandle(instance->stdout_pipe);
+	#else
+	close(instance->stdout_pipe);
+	#endif
+}

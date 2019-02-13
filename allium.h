@@ -32,5 +32,6 @@ struct TorInstance *allium_new_instance(char *tor_path);
 bool allium_start(struct TorInstance *instance, char *config, allium_pipe *output_pipes);
 char *allium_read_stdout_line(struct TorInstance *instance);
 int allium_get_exit_code(struct TorInstance *instance);
+void allium_clean(struct TorInstance *instance);
 
 #endif
