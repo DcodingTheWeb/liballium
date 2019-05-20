@@ -1,9 +1,15 @@
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include "allium.h"
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
+#include <tomcrypt.h>
+
+// Internal functions
+bool secret_to_key_rfc2440(unsigned char *key_out, size_t key_out_len, const char *secret, size_t secret_len, const unsigned char *s2k_specifier);
+char *bin2hex(const unsigned char *bin, size_t len);
 
 struct TorInstance *allium_new_instance(char *tor_path) {
 	struct TorInstance *instance = malloc(sizeof(struct TorInstance));
@@ -209,6 +215,36 @@ int allium_get_exit_code(struct TorInstance *instance) {
 	#endif
 }
 
+char *allium_hash(char *password) {
+	unsigned char key[KEY_LEN];
+	sprng_read(key, S2K_SPECIFIER_LEN - 1, NULL);
+	key[S2K_SPECIFIER_LEN - 1] = 96;
+	
+	bool success = secret_to_key_rfc2440(
+		key + S2K_SPECIFIER_LEN,
+		DIGEST_LEN,
+		password,
+		strlen(password),
+		key
+	);
+	if (!success) return NULL;
+	
+	char *key_string = bin2hex(key, KEY_LEN);
+	if (!key_string) return NULL;
+	
+	char *hash_string = malloc(61);
+	if (!hash_string) {
+		free(key_string);
+		return NULL;
+	}
+	
+	strcpy(hash_string, "16:");
+	strcat(hash_string, key_string);
+	
+	free(key_string);
+	return hash_string;
+}
+
 void allium_clean(struct TorInstance *instance) {
 	#ifdef _WIN32
 	CloseHandle(instance->process.hProcess);
@@ -217,4 +253,67 @@ void allium_clean(struct TorInstance *instance) {
 	#else
 	close(instance->stdout_pipe);
 	#endif
+}
+
+// Internal functions
+
+bool secret_to_key_rfc2440(unsigned char *key_out, size_t key_out_len, const char *secret, size_t secret_len, const unsigned char *s2k_specifier) {
+	char iteration_count = s2k_specifier[S2K_SPECIFIER_LEN - 1];
+	#define EXPBIAS 6
+	size_t count = ((uint32_t)16 + (iteration_count & 15)) << ((iteration_count >> 4) + EXPBIAS);
+	#undef EXPBIAS
+	
+	// Allocate and populate the temporary buffer with data
+	// This is the data which will be hashed
+	char *temp = malloc((S2K_SPECIFIER_LEN - 1) + secret_len);
+	memcpy(temp, s2k_specifier, S2K_SPECIFIER_LEN - 1);
+	memcpy(temp + (S2K_SPECIFIER_LEN - 1), secret, secret_len);
+	secret_len += S2K_SPECIFIER_LEN - 1;
+	
+	// Hash the data
+	hash_state hash;
+	if (sha1_init(&hash) != CRYPT_OK) return false;
+	
+	int result;
+	while (count != 0) {
+		if (count >= secret_len) {
+			result = sha1_process(&hash, (unsigned char *) temp, secret_len);
+			count -= secret_len;
+		} else {
+			result = sha1_process(&hash, (unsigned char *) temp, count);
+			count = 0;
+		}
+		if (result != CRYPT_OK) return false;
+	}
+	free(temp);
+	
+	// Get the raw digest
+	unsigned char digest[DIGEST_LEN];
+	result = sha1_done(&hash, digest);
+	if (result != CRYPT_OK) return false;
+	
+	// Copy the digest
+	if (key_out_len <= DIGEST_LEN) {
+		memcpy(key_out, digest, key_out_len);
+		return true;
+	} else {
+		// Key expansion is unsupported at the moment
+		return false;
+	}
+}
+
+// Forked from: https://nachtimwald.com/2017/09/24/hex-encode-and-decode-in-c/
+char *bin2hex(const unsigned char *bin, size_t len) {
+	if (bin == NULL || len == 0) return NULL;
+	
+	char *out = malloc(len*2+1);
+	if (!out) return NULL;
+	
+	for (size_t i=0; i<len; i++) {
+		out[i*2]   = "0123456789ABCDEF"[bin[i] >> 4];
+		out[i*2+1] = "0123456789ABCDEF"[bin[i] & 0x0F];
+	}
+	out[len*2] = '\0';
+	
+	return out;
 }
