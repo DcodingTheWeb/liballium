@@ -5,11 +5,15 @@
 #ifndef _WIN32
 #include <sys/wait.h>
 #endif
+#ifdef FOUND_CRYPT
 #include <tomcrypt.h>
+#endif
 
 // Internal functions
+#ifdef FOUND_CRYPT
 bool secret_to_key_rfc2440(unsigned char *key_out, size_t key_out_len, const char *secret, size_t secret_len, const unsigned char *s2k_specifier);
 char *bin2hex(const unsigned char *bin, size_t len);
+#endif
 
 struct TorInstance *allium_new_instance(char *tor_path) {
 	struct TorInstance *instance = malloc(sizeof(struct TorInstance));
@@ -215,6 +219,7 @@ int allium_get_exit_code(struct TorInstance *instance) {
 	#endif
 }
 
+#ifdef FOUND_CRYPT
 char *allium_hash(char *password) {
 	unsigned char key[KEY_LEN];
 	sprng_read(key, S2K_SPECIFIER_LEN - 1, NULL);
@@ -244,6 +249,7 @@ char *allium_hash(char *password) {
 	free(key_string);
 	return hash_string;
 }
+#endif
 
 void allium_clean(struct TorInstance *instance) {
 	#ifdef _WIN32
@@ -256,6 +262,8 @@ void allium_clean(struct TorInstance *instance) {
 }
 
 // Internal functions
+
+#ifdef FOUND_CRYPT
 
 bool secret_to_key_rfc2440(unsigned char *key_out, size_t key_out_len, const char *secret, size_t secret_len, const unsigned char *s2k_specifier) {
 	char iteration_count = s2k_specifier[S2K_SPECIFIER_LEN - 1];
@@ -317,3 +325,5 @@ char *bin2hex(const unsigned char *bin, size_t len) {
 	
 	return out;
 }
+
+#endif
