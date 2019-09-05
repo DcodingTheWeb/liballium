@@ -3,6 +3,7 @@
 #include <string.h>
 #include "allium.h"
 #ifndef _WIN32
+#include <poll.h>
 #include <sys/wait.h>
 #endif
 #ifdef FOUND_CRYPT
@@ -159,6 +160,34 @@ bool allium_start(struct TorInstance *instance, char *config, allium_pipe *outpu
 	return true;
 }
 
+enum allium_status allium_get_status(struct TorInstance *instance) {
+	// Check if any data is available for reading in the buffer
+	#ifdef _WIN32
+	unsigned long bytes_available;
+	bool success = PeekNamedPipe(instance->stdout_pipe, NULL, 0, NULL, &bytes_available, NULL);
+	if (success && bytes_available > 0) return DATA_AVAILABLE;
+	#else
+	if (poll(&(struct pollfd){.fd = instance->stdout_pipe, .events = POLLIN}, 1, 0) > 0) return DATA_AVAILABLE;
+	#endif
+
+	// Check if Tor is still running
+	#ifdef _WIN32
+	if (WaitForSingleObject(instance->process.hProcess, 0) == WAIT_TIMEOUT) {
+		return RUNNING;
+	} else {
+		return STOPPED;
+	}
+	#else
+	int status;
+	if (waitpid(instance->pid, &status, WNOHANG) > 0) {
+		instance->exit_code = WEXITSTATUS(status);
+		return WIFEXITED(status) ? STOPPED : RUNNING;
+	} else {
+		return RUNNING;
+	}
+	#endif
+}
+
 char *allium_read_stdout_line(struct TorInstance *instance) {
 	char *buffer = instance->buffer.data;
 	
@@ -213,9 +242,7 @@ int allium_get_exit_code(struct TorInstance *instance) {
 	if (!success) return -1;
 	return exit_code;
 	#else
-	int status;
-	waitpid(instance->pid, &status, 0);
-	return WEXITSTATUS(status);
+	return instance->exit_code;
 	#endif
 }
 
