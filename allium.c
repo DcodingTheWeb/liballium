@@ -167,7 +167,7 @@ enum allium_status allium_get_status(struct TorInstance *instance) {
 	bool success = PeekNamedPipe(instance->stdout_pipe, NULL, 0, NULL, &bytes_available, NULL);
 	if (success && bytes_available > 0) return DATA_AVAILABLE;
 	#else
-	if (poll(&(struct pollfd){.fd = instance->stdout_pipe, .events = POLLIN}, 1, 0) > 0) return DATA_AVAILABLE;
+	if (instance->stdout_pipe != -1 && poll(&(struct pollfd){.fd = instance->stdout_pipe, .events = POLLIN}, 1, 0) > 0) return DATA_AVAILABLE;
 	#endif
 
 	// Check if Tor is still running
@@ -205,7 +205,18 @@ char *allium_read_stdout_line(struct TorInstance *instance) {
 		unsigned long bytes_read;
 		if (ReadFile(instance->stdout_pipe, buffer, 1, &bytes_read, NULL) == false || bytes_read == 0) return NULL;
 		#else
-		if (read(instance->stdout_pipe, buffer, 1) <= 0) return NULL;
+		ssize_t return_val = read(instance->stdout_pipe, buffer, 1);
+		if (return_val <= 0) {
+			if (return_val == 0) {
+				/* EOF has been reached which means that the pipe has been closed on the other end.
+				 * Most likely this means that Tor has exited, so close the pipe on our end and set
+				 * the file descriptor to -1 so that it can later be checked if the pipe has been closed.
+				 */
+				close(instance->stdout_pipe);
+				instance->stdout_pipe = -1;
+			}
+			return NULL;
+		}
 		#endif
 		
 		// Check if we have reached end of line
@@ -284,7 +295,7 @@ void allium_clean(struct TorInstance *instance) {
 	CloseHandle(instance->process.hThread);
 	CloseHandle(instance->stdout_pipe);
 	#else
-	close(instance->stdout_pipe);
+	if (instance->stdout_pipe != -1) close(instance->stdout_pipe);
 	#endif
 }
 
