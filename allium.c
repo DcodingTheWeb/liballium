@@ -162,13 +162,8 @@ bool allium_start(struct TorInstance *instance, char *config, allium_pipe *outpu
 
 enum allium_status allium_get_status(struct TorInstance *instance) {
 	// Check if any data is available for reading in the buffer
-	#ifdef _WIN32
-	unsigned long bytes_available;
-	bool success = PeekNamedPipe(instance->stdout_pipe, NULL, 0, NULL, &bytes_available, NULL);
-	if (success && bytes_available > 0) return DATA_AVAILABLE;
-	#else
-	if (instance->stdout_pipe != -1 && poll(&(struct pollfd){.fd = instance->stdout_pipe, .events = POLLIN}, 1, 0) > 0) return DATA_AVAILABLE;
-	#endif
+	bool data_available = allium_wait_for_output(instance, 0);
+	if (data_available) return DATA_AVAILABLE;
 
 	// Check if Tor is still running
 	#ifdef _WIN32
@@ -185,6 +180,19 @@ enum allium_status allium_get_status(struct TorInstance *instance) {
 	} else {
 		return RUNNING;
 	}
+	#endif
+}
+
+bool allium_wait_for_output(struct TorInstance *instance, int timeout) {
+	#ifdef _WIN32
+	// Quick and dirty simple alternative to poll
+	if (timeout > 0) Sleep(timeout);
+	unsigned long bytes_available;
+	bool success = PeekNamedPipe(instance->stdout_pipe, NULL, 0, NULL, &bytes_available, NULL);
+	return success && bytes_available > 0;
+	#else
+	if (instance->stdout_pipe == -1) return false;
+	return poll(&(struct pollfd){.fd = instance->stdout_pipe, .events = POLLIN}, 1, timeout) > 0;
 	#endif
 }
 
