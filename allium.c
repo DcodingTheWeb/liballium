@@ -185,11 +185,17 @@ enum allium_status allium_get_status(struct TorInstance *instance) {
 
 bool allium_wait_for_output(struct TorInstance *instance, int timeout) {
 	#ifdef _WIN32
-	// Quick and dirty simple alternative to poll
-	if (timeout > 0) Sleep(timeout);
+	unsigned long start_time;
+	if (timeout > 0) start_time = GetTickCount();
 	unsigned long bytes_available;
-	bool success = PeekNamedPipe(instance->stdout_pipe, NULL, 0, NULL, &bytes_available, NULL);
-	return success && bytes_available > 0;
+	while (true) {
+		bool success = PeekNamedPipe(instance->stdout_pipe, NULL, 0, NULL, &bytes_available, NULL);
+		if (success && bytes_available > 0) return true;
+		if (timeout > 0) {
+			if (GetTickCount() - start_time > timeout) return false;
+			Sleep(1);
+		}
+	}
 	#else
 	if (instance->stdout_pipe == -1) return false;
 	return poll(&(struct pollfd){.fd = instance->stdout_pipe, .events = POLLIN}, 1, timeout) > 0;
