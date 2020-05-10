@@ -198,7 +198,9 @@ bool allium_wait_for_output(struct TorInstance *instance, int timeout) {
 	}
 	#else
 	if (instance->stdout_pipe == -1) return false;
-	return poll(&(struct pollfd){.fd = instance->stdout_pipe, .events = POLLIN}, 1, timeout) > 0;
+	struct pollfd poll_data = {.fd = instance->stdout_pipe, .events = POLLIN};
+	int event_num = poll(&poll_data, 1, timeout);
+	return event_num > 0 && !(poll_data.revents & POLLHUP);
 	#endif
 }
 
