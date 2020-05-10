@@ -160,9 +160,9 @@ bool allium_start(struct TorInstance *instance, char *config, allium_pipe *outpu
 	return true;
 }
 
-enum allium_status allium_get_status(struct TorInstance *instance) {
+enum allium_status allium_get_status(struct TorInstance *instance, int timeout) {
 	// Check if any data is available for reading in the buffer
-	bool data_available = allium_wait_for_output(instance, 0);
+	bool data_available = allium_wait_for_output(instance, timeout);
 	if (data_available) return DATA_AVAILABLE;
 
 	// Check if Tor is still running
