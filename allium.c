@@ -183,9 +183,13 @@ enum allium_status allium_get_status(struct TorInstance *instance, int timeout) 
 	}
 	#else
 	int status;
-	if (waitpid(instance->pid, &status, WNOHANG) > 0) {
+	pid_t result = waitpid(instance->pid, &status, WNOHANG);
+	if (result > 0) {
 		instance->exit_code = WEXITSTATUS(status);
-		return WIFEXITED(status) ? STOPPED : RUNNING;
+		return WIFEXITED(status) || WIFSIGNALED(status) ? STOPPED : RUNNING;
+	} else if (result == -1) {
+		instance->exit_code = EXIT_FAILURE;
+		return STOPPED;
 	} else {
 		return RUNNING;
 	}
