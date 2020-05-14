@@ -4,6 +4,7 @@
 #include "allium.h"
 #ifndef _WIN32
 #include <poll.h>
+#include <signal.h>
 #include <sys/wait.h>
 #endif
 #ifdef FOUND_CRYPT
@@ -158,6 +159,14 @@ bool allium_start(struct TorInstance *instance, char *config, allium_pipe *outpu
 	instance->pid = pid;
 	#endif
 	return true;
+}
+
+void allium_stop(struct TorInstance *instance) {
+	#ifdef _WIN32
+	GenerateConsoleCtrlEvent(CTRL_C_EVENT, instance->process.dwProcessId);
+	#else
+	kill(instance->pid, SIGTERM);
+	#endif
 }
 
 enum allium_status allium_get_status(struct TorInstance *instance, int timeout) {
