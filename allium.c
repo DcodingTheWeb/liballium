@@ -194,7 +194,7 @@ bool allium_wait_for_output(struct TorInstance *instance, int timeout) {
 		if (timeout > 0) {
 			if (GetTickCount() - start_time > timeout) return false;
 			Sleep(1);
-		}
+		} else return false;
 	}
 	#else
 	if (instance->stdout_pipe == -1) return false;
