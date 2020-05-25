@@ -169,6 +169,14 @@ void allium_stop(struct TorInstance *instance) {
 	#endif
 }
 
+void allium_kill(struct TorInstance *instance) {
+	#ifdef _WIN32
+	bool success = TerminateProcess(instance->process.hProcess, EXIT_FAILURE);
+	#else
+	kill(instance->pid, SIGKILL);
+	#endif
+}
+
 enum allium_status allium_get_status(struct TorInstance *instance, int timeout) {
 	// Check if any data is available for reading in the buffer
 	bool data_available = allium_wait_for_output(instance, timeout);

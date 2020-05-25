@@ -45,6 +45,7 @@ struct TorInstance {
 struct TorInstance *allium_new_instance(char *tor_path);
 bool allium_start(struct TorInstance *instance, char *config, allium_pipe *output_pipes);
 void allium_stop(struct TorInstance *instance);
+void allium_kill(struct TorInstance *instance);
 enum allium_status allium_get_status(struct TorInstance *instance, int timeout);
 bool allium_wait_for_output(struct TorInstance *instance, int timeout);
 char *allium_read_stdout_line(struct TorInstance *instance);
